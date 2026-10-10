@@ -1,0 +1,871 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <link rel="icon" href="data:," />
+  <title>M3U 播放器</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+
+    :root {
+      color-scheme: light dark;
+      --bg: #f3f1ec;
+      --surface: #ffffff;
+      --surface-2: #eae7df;
+      --ink: #171914;
+      --muted: #60645b;
+      --line: #d3d0c8;
+      --accent: #c94b2c;
+      --accent-ink: #ffffff;
+      --accent-soft: #f5d8cf;
+      --stage: #121310;
+      --stage-soft: #20221d;
+      --stage-ink: #f4f5ef;
+      --success: #23754b;
+      --warn: #9a5a10;
+      --danger: #b7352d;
+      --shadow: 0 18px 55px rgba(39, 34, 23, .10);
+      --radius-lg: 24px;
+      --radius-md: 14px;
+      --radius-sm: 9px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #10110e;
+        --surface: #191a16;
+        --surface-2: #23241f;
+        --ink: #f1f2eb;
+        --muted: #a8aca0;
+        --line: #363830;
+        --accent: #ef6b48;
+        --accent-ink: #17110e;
+        --accent-soft: #4a261e;
+        --stage: #080906;
+        --stage-soft: #151612;
+        --stage-ink: #f5f6ef;
+        --success: #67c995;
+        --warn: #e2a75f;
+        --danger: #ff8175;
+        --shadow: 0 22px 64px rgba(0, 0, 0, .32);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 0; }
+    body {
+      margin: 0;
+      min-width: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "DM Sans", "Noto Sans SC", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+
+    .page {
+      width: min(1440px, 100%);
+      margin: 0 auto;
+      padding: 28px clamp(18px, 3vw, 46px) 46px;
+    }
+
+    .intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+    .intro h1 {
+      margin: 0 0 8px;
+      max-width: 760px;
+      font-size: clamp(30px, 4.5vw, 58px);
+      line-height: .98;
+      letter-spacing: -.045em;
+      font-weight: 700;
+    }
+    .intro p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    .privacy-note {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .privacy-note::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 14%, transparent);
+    }
+
+    .source-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 10px;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
+    .url-wrap {
+      position: relative;
+      min-width: 0;
+    }
+    .url-wrap svg {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 18px;
+      height: 18px;
+      color: var(--muted);
+      pointer-events: none;
+    }
+    #playlistUrl {
+      width: 100%;
+      min-width: 0;
+      height: 48px;
+      padding: 0 14px 0 42px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      color: var(--ink);
+      outline: none;
+    }
+    #playlistUrl:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+    #playlistUrl::placeholder { color: color-mix(in srgb, var(--muted) 72%, transparent); }
+
+    .btn {
+      height: 48px;
+      border: 0;
+      border-radius: var(--radius-sm);
+      padding: 0 18px;
+      font-weight: 650;
+      cursor: pointer;
+      transition: background .18s ease, color .18s ease, transform .18s ease;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: var(--accent); color: var(--accent-ink); }
+    .btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, black); }
+    .btn-secondary { background: var(--surface-2); color: var(--ink); }
+    .btn-secondary:hover { background: color-mix(in srgb, var(--surface-2) 85%, var(--accent)); }
+    .btn:disabled { opacity: .58; cursor: wait; }
+    .file-picker { display: none; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.64fr) minmax(300px, .76fr);
+      align-items: start;
+      gap: 18px;
+    }
+
+    .player-card {
+      min-width: 0;
+      overflow: hidden;
+      background: var(--stage);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+    }
+    .video-shell {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      min-height: 260px;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 70% 20%, rgba(239,107,72,.16), transparent 30%),
+        linear-gradient(135deg, var(--stage), var(--stage-soft));
+    }
+    video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+      display: none;
+    }
+    video.ready { display: block; }
+    .empty-stage {
+      position: relative;
+      z-index: 1;
+      max-width: 420px;
+      padding: 34px;
+      text-align: center;
+      color: var(--stage-ink);
+    }
+    .empty-stage .play-mark {
+      width: 66px;
+      height: 66px;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 20px;
+      border-radius: 50%;
+      color: var(--accent-ink);
+      background: var(--accent);
+      box-shadow: 0 12px 38px rgba(0,0,0,.28);
+    }
+    .empty-stage .play-mark svg { width: 25px; height: 25px; margin-left: 3px; }
+    .empty-stage h2 { margin: 0 0 8px; font-size: 22px; letter-spacing: -.02em; }
+    .empty-stage p { margin: 0; color: #b9bcb2; font-size: 14px; line-height: 1.55; }
+
+    .now-playing {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-height: 82px;
+      padding: 16px 20px 18px;
+      color: var(--stage-ink);
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+    .channel-art {
+      width: 48px;
+      height: 48px;
+      flex: 0 0 48px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 11px;
+      background: #2a2c26;
+      color: #c8cabf;
+      font-weight: 700;
+    }
+    .channel-art img { width: 100%; height: 100%; object-fit: cover; }
+    .now-copy { min-width: 0; flex: 1; }
+    .now-label { margin-bottom: 3px; color: #999d91; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+    .now-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 650; }
+    .now-meta { margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #aeb1a7; font-size: 12px; }
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 9px;
+      border-radius: 7px;
+      color: #ffb9aa;
+      background: rgba(239,107,72,.15);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .live-pill[hidden] { display: none; }
+    .live-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #ef6b48; }
+
+    .library {
+      min-width: 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .library-head { padding: 18px 18px 14px; border-bottom: 1px solid var(--line); }
+    .library-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+    .library-title h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+    .count { color: var(--muted); font-size: 12px; }
+    .search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    #searchInput, #groupSelect {
+      min-width: 0;
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--ink);
+      outline: none;
+    }
+    #searchInput { width: 100%; padding: 0 12px; }
+    #groupSelect { max-width: 132px; padding: 0 28px 0 10px; }
+    #searchInput:focus, #groupSelect:focus { border-color: var(--accent); }
+
+    .channel-list {
+      max-height: min(584px, calc(100vh - 260px));
+      min-height: 330px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line) transparent;
+    }
+    .list-empty {
+      display: grid;
+      place-items: center;
+      min-height: 330px;
+      padding: 36px 24px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+    .channel-item {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) 24px;
+      align-items: center;
+      gap: 11px;
+      padding: 11px 15px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+    .channel-item:last-child { border-bottom: 0; }
+    .channel-item:hover { background: var(--surface-2); }
+    .channel-item.active { background: var(--accent-soft); }
+    .mini-art {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 9px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .mini-art img { width: 100%; height: 100%; object-fit: cover; }
+    .item-copy { min-width: 0; }
+    .item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; font-size: 14px; }
+    .item-group { margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
+    .item-play { color: var(--muted); }
+    .item-play svg { width: 18px; height: 18px; display: block; }
+
+    .status {
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 16px;
+      padding: 13px 15px;
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .status.show { display: flex; }
+    .status svg { flex: 0 0 18px; width: 18px; height: 18px; margin-top: 1px; }
+    .status.error { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 38%, var(--line)); }
+    .status.success { color: var(--success); border-color: color-mix(in srgb, var(--success) 38%, var(--line)); }
+    .status.loading { color: var(--warn); }
+
+    .help {
+      margin-top: 20px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--line);
+    }
+    .help-item { padding: 17px 18px; background: var(--surface); }
+    .help-item strong { display: block; margin-bottom: 4px; font-size: 13px; }
+    .help-item span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+    @media (max-width: 860px) {
+      .page { padding-top: 20px; }
+      .intro { grid-template-columns: 1fr; gap: 10px; }
+      .privacy-note { justify-self: start; }
+      .workspace { grid-template-columns: 1fr; }
+      .channel-list { max-height: 460px; }
+      .help { grid-template-columns: 1fr; }
+      .video-shell { min-height: 0; }
+    }
+
+    @media (max-width: 620px) {
+      .page { padding-inline: 12px; padding-bottom: 26px; }
+      .intro { padding-inline: 5px; }
+      .intro h1 { font-size: 36px; }
+      .source-panel { grid-template-columns: 1fr 1fr; }
+      .url-wrap { grid-column: 1 / -1; }
+      .btn { padding-inline: 12px; }
+      .player-card, .library { border-radius: 17px; }
+      .now-playing { padding: 13px 14px 15px; min-height: 72px; }
+      .channel-art { width: 42px; height: 42px; flex-basis: 42px; }
+      .live-pill { display: none; }
+      .library-head { padding: 15px 13px 12px; }
+      .search-row { grid-template-columns: minmax(0, 1fr) 116px; }
+      #groupSelect { max-width: 116px; }
+      .channel-list, .list-empty { min-height: 280px; }
+      .help { margin-top: 14px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <h1 id="page-title">贴上链接，马上开播。</h1>
+        <p>支持 M3U 频道列表与 HLS（M3U8）直播流，也可以读取本机播放列表文件。</p>
+      </div>
+      <div class="privacy-note">跨域链接会自动切换兼容读取</div>
+    </section>
+
+    <form class="source-panel" id="urlForm">
+      <div class="url-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07.07l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15"/><path d="M14 11a5 5 0 0 0-7.07-.07l-2 2A5 5 0 0 0 12 20l1.15-1.15"/></svg>
+        <label class="sr-only" for="playlistUrl" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;">M3U 或 M3U8 链接</label>
+        <input id="playlistUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com/playlist.m3u" required />
+      </div>
+      <button class="btn btn-primary" id="loadBtn" type="submit">载入链接</button>
+      <button class="btn btn-secondary" id="openFileBtn" type="button">打开文件</button>
+      <input class="file-picker" id="fileInput" type="file" accept=".m3u,.m3u8,application/vnd.apple.mpegurl,audio/x-mpegurl" tabindex="-1" aria-hidden="true" />
+    </form>
+
+    <section class="workspace">
+      <div class="player-card">
+        <div class="video-shell" id="videoShell">
+          <video id="video" controls playsinline></video>
+          <div class="empty-stage" id="emptyStage">
+            <div class="play-mark">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+            </div>
+            <h2>等待播放源</h2>
+            <p>载入播放列表后选择频道，或直接贴上一个 M3U8 流地址。</p>
+          </div>
+        </div>
+        <div class="now-playing">
+          <div class="channel-art" id="nowArt">—</div>
+          <div class="now-copy">
+            <div class="now-label" id="nowLabel">播放状态</div>
+            <div class="now-name" id="nowName">尚未选择频道</div>
+            <div class="now-meta" id="nowMeta">载入链接即可开始</div>
+          </div>
+          <div class="live-pill" id="livePill" hidden>LIVE</div>
+        </div>
+      </div>
+
+      <aside class="library" aria-label="频道列表">
+        <div class="library-head">
+          <div class="library-title">
+            <h2>频道</h2>
+            <span class="count" id="channelCount">0 个频道</span>
+          </div>
+          <div class="search-row">
+            <input id="searchInput" type="search" placeholder="搜索频道" aria-label="搜索频道" disabled />
+            <select id="groupSelect" aria-label="筛选分组" disabled>
+              <option value="">全部分组</option>
+            </select>
+          </div>
+        </div>
+        <div class="channel-list" id="channelList">
+          <div class="list-empty">频道会显示在这里。<br>先载入一个 M3U 播放列表。</div>
+        </div>
+      </aside>
+    </section>
+
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+
+    <section class="help" aria-label="使用提示">
+      <div class="help-item"><strong>链接无法读取？</strong><span>播放器会自动尝试兼容通道；仍失败时，可下载 M3U 文件后用“打开文件”载入。</span></div>
+      <div class="help-item"><strong>有画面但没声音？</strong><span>浏览器只支持部分影音编码；可尝试同一频道的其他线路。</span></div>
+      <div class="help-item"><strong>HTTP 播放源</strong><span>安全网页通常会拦截 HTTP 流，请优先使用 HTTPS 链接。</span></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.13/dist/hls.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var form = document.getElementById('urlForm');
+      var urlInput = document.getElementById('playlistUrl');
+      var loadBtn = document.getElementById('loadBtn');
+      var openFileBtn = document.getElementById('openFileBtn');
+      var fileInput = document.getElementById('fileInput');
+      var video = document.getElementById('video');
+      var emptyStage = document.getElementById('emptyStage');
+      var channelList = document.getElementById('channelList');
+      var channelCount = document.getElementById('channelCount');
+      var searchInput = document.getElementById('searchInput');
+      var groupSelect = document.getElementById('groupSelect');
+      var statusBox = document.getElementById('status');
+      var nowLabel = document.getElementById('nowLabel');
+      var nowName = document.getElementById('nowName');
+      var nowMeta = document.getElementById('nowMeta');
+      var nowArt = document.getElementById('nowArt');
+      var livePill = document.getElementById('livePill');
+
+      var channels = [];
+      var activeUrl = '';
+      var hls = null;
+
+      var icons = {
+        info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+        check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>',
+        error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></svg>'
+      };
+
+      function setStatus(message, type) {
+        if (!message) {
+          statusBox.className = 'status';
+          statusBox.innerHTML = '';
+          return;
+        }
+        var icon = type === 'success' ? icons.check : (type === 'error' ? icons.error : icons.info);
+        statusBox.className = 'status show ' + (type || '');
+        statusBox.innerHTML = icon + '<span></span>';
+        statusBox.querySelector('span').textContent = message;
+      }
+
+      function cleanUrl(url, baseUrl) {
+        var value = String(url || '').trim();
+        if (!value) return '';
+        try { return new URL(value, baseUrl || window.location.href).href; }
+        catch (e) { return value; }
+      }
+
+      function attr(line, key) {
+        var expression = new RegExp(key + '=(?:"([^"]*)"|([^,\\s]*))', 'i');
+        var match = line.match(expression);
+        return match ? (match[1] !== undefined ? match[1] : match[2]) : '';
+      }
+
+      function parseM3U(text, baseUrl) {
+        var lines = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/);
+        var result = [];
+        var pending = null;
+
+        lines.forEach(function (rawLine) {
+          var line = rawLine.trim();
+          if (!line) return;
+          if (line.indexOf('#EXTINF:') === 0) {
+            var comma = line.indexOf(',');
+            var fallbackName = comma >= 0 ? line.slice(comma + 1).trim() : '';
+            pending = {
+              name: attr(line, 'tvg-name') || fallbackName || '未命名频道',
+              logo: attr(line, 'tvg-logo'),
+              group: attr(line, 'group-title') || '未分组'
+            };
+            return;
+          }
+          if (line.indexOf('#EXTGRP:') === 0 && pending) {
+            pending.group = line.slice(8).trim() || pending.group;
+            return;
+          }
+          if (line.charAt(0) !== '#') {
+            var looksLikeAddress = /^(?:[a-z][a-z0-9+.-]*:|\/\/|\.\.?\/|\/)/i.test(line) || /\.(?:m3u8?|mpd|mp4|mkv|webm|ts|aac)(?:$|[?#])/i.test(line);
+            if (pending && !looksLikeAddress) {
+              var normalizedName = pending.name.replace(/\s+/g, ' ').trim();
+              if (normalizedName.toLowerCase().slice(-line.length) !== line.toLowerCase()) {
+                pending.name = (normalizedName + ' ' + line).trim();
+              }
+              return;
+            }
+            if (!looksLikeAddress) return;
+            var item = pending || { name: '频道 ' + (result.length + 1), logo: '', group: '未分组' };
+            item.url = cleanUrl(line, baseUrl);
+            item.id = result.length;
+            result.push(item);
+            pending = null;
+          }
+        });
+        return result;
+      }
+
+      function isHlsManifest(text) {
+        return /#EXT-X-(TARGETDURATION|STREAM-INF|MEDIA-SEQUENCE|PLAYLIST-TYPE|ENDLIST)/i.test(text || '');
+      }
+
+      function initials(name) {
+        var value = String(name || '').trim();
+        return value ? value.slice(0, 2).toUpperCase() : 'TV';
+      }
+
+      function artMarkup(item, className) {
+        var box = document.createElement('span');
+        box.className = className;
+        box.textContent = initials(item.name);
+        return box;
+      }
+
+      function updateGroups() {
+        var current = groupSelect.value;
+        var groups = [];
+        channels.forEach(function (item) {
+          if (item.group && groups.indexOf(item.group) === -1) groups.push(item.group);
+        });
+        groups.sort(function (a, b) { return a.localeCompare(b, 'zh-Hans-CN'); });
+        groupSelect.innerHTML = '<option value="">全部分组</option>';
+        groups.forEach(function (group) {
+          var option = document.createElement('option');
+          option.value = group;
+          option.textContent = group;
+          groupSelect.appendChild(option);
+        });
+        if (groups.indexOf(current) >= 0) groupSelect.value = current;
+      }
+
+      function renderChannels() {
+        var query = searchInput.value.trim().toLowerCase();
+        var group = groupSelect.value;
+        var filtered = channels.filter(function (item) {
+          return (!query || item.name.toLowerCase().indexOf(query) >= 0 || item.group.toLowerCase().indexOf(query) >= 0) && (!group || item.group === group);
+        });
+
+        channelList.innerHTML = '';
+        channelCount.textContent = filtered.length === channels.length ? channels.length + ' 个频道' : filtered.length + ' / ' + channels.length + ' 个';
+
+        if (!filtered.length) {
+          var empty = document.createElement('div');
+          empty.className = 'list-empty';
+          empty.textContent = channels.length ? '没有符合筛选条件的频道。' : '这个播放列表里没有找到频道。';
+          channelList.appendChild(empty);
+          return;
+        }
+
+        var fragment = document.createDocumentFragment();
+        filtered.forEach(function (item) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'channel-item' + (item.url === activeUrl ? ' active' : '');
+          button.setAttribute('aria-label', '播放 ' + item.name);
+          button.appendChild(artMarkup(item, 'mini-art'));
+
+          var copy = document.createElement('span');
+          copy.className = 'item-copy';
+          var name = document.createElement('span');
+          name.className = 'item-name';
+          name.textContent = item.name;
+          var itemGroup = document.createElement('span');
+          itemGroup.className = 'item-group';
+          itemGroup.textContent = item.group || '未分组';
+          copy.appendChild(name);
+          copy.appendChild(itemGroup);
+          button.appendChild(copy);
+
+          var play = document.createElement('span');
+          play.className = 'item-play';
+          play.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+          button.appendChild(play);
+          button.addEventListener('click', function () { playChannel(item); });
+          fragment.appendChild(button);
+        });
+        channelList.appendChild(fragment);
+      }
+
+      function destroyPlayer() {
+        if (hls) { hls.destroy(); hls = null; }
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        livePill.hidden = true;
+      }
+
+      function updateNowPlaying(item) {
+        nowLabel.textContent = '准备播放';
+        nowName.textContent = item.name || '直播流';
+        nowMeta.textContent = item.group || '直接播放';
+        nowArt.textContent = initials(item.name);
+        livePill.hidden = true;
+      }
+
+      function playChannel(item) {
+        destroyPlayer();
+        activeUrl = item.url;
+        updateNowPlaying(item);
+        renderChannels();
+        emptyStage.style.display = 'none';
+        video.classList.add('ready');
+        setStatus('正在连接「' + item.name + '」…', 'loading');
+
+        function tryPlay() {
+          var promise = video.play();
+          if (promise && promise.catch) {
+            promise.catch(function () {
+              setStatus('频道已载入。点一下播放器上的播放键开始。', 'success');
+            });
+          }
+        }
+
+        if (window.Hls && window.Hls.isSupported()) {
+          hls = new window.Hls({ enableWorker: true, lowLatencyMode: true, backBufferLength: 60 });
+          hls.loadSource(item.url);
+          hls.attachMedia(video);
+          hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
+            setStatus('频道已载入，正在播放。', 'success');
+            tryPlay();
+          });
+          hls.on(window.Hls.Events.ERROR, function (event, data) {
+            if (!data || !data.fatal) return;
+            if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
+              setStatus('无法连接这个频道。可能是链接失效、跨域限制或网络阻挡。', 'error');
+            } else if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
+              setStatus('浏览器无法解码这个频道的影音格式。', 'error');
+            } else {
+              setStatus('频道播放失败，请尝试其他线路。', 'error');
+            }
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = item.url;
+          video.addEventListener('loadedmetadata', function onReady() {
+            video.removeEventListener('loadedmetadata', onReady);
+            setStatus('频道已载入，正在播放。', 'success');
+            tryPlay();
+          });
+        } else {
+          video.src = item.url;
+          tryPlay();
+        }
+      }
+
+      function setChannels(list, sourceLabel) {
+        channels = list;
+        activeUrl = '';
+        searchInput.value = '';
+        searchInput.disabled = !list.length;
+        groupSelect.disabled = !list.length;
+        updateGroups();
+        renderChannels();
+        if (list.length) setStatus('已载入 ' + sourceLabel + '，共 ' + list.length + ' 个频道。请选择一个频道播放。', 'success');
+        else setStatus('没有在这个文件里找到可播放的频道地址。', 'error');
+      }
+
+      var playlistProxy = 'https://api.allorigins.win/raw?url=';
+      var compatibleCopies = {
+        'https://kan.waiguotai.top/other.m3u': {
+          checked: '2026-10-10',
+          channels: [
+            { id: 0, name: '注意事项', logo: '', group: '注意事项', url: 'https://cdn.jsdelivr.net/gh/jkwu5472/first/media.m3u8' },
+            { id: 1, name: 'Apple TV 4K Dolby Vision F1', logo: '', group: '4K杜比视界赛事直播', url: 'https://kan.waiguotai.top/appletvf1.m3u8' }
+          ]
+        }
+      };
+
+      async function fetchText(url, timeoutMs) {
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timer = controller ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
+        try {
+          var response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            credentials: 'omit',
+            signal: controller ? controller.signal : undefined
+          });
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          return await response.text();
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      }
+
+      async function readPlaylist(url) {
+        try {
+          return { text: await fetchText(url, 9000), viaProxy: false };
+        } catch (directError) {
+          setStatus('原站限制网页读取，正在切换兼容通道…', 'loading');
+          return {
+            text: await fetchText(playlistProxy + encodeURIComponent(url), 14000),
+            viaProxy: true
+          };
+        }
+      }
+
+      async function loadRemote(url) {
+        var clean = cleanUrl(url);
+        if (!/^https?:\/\//i.test(clean)) {
+          setStatus('请输入以 http:// 或 https:// 开头的完整链接。', 'error');
+          return;
+        }
+        loadBtn.disabled = true;
+        loadBtn.textContent = '读取中…';
+        setStatus('正在读取播放源…', 'loading');
+
+        try {
+          var loaded = await readPlaylist(clean);
+          var text = loaded.text;
+          if (isHlsManifest(text)) {
+            setChannels([], '');
+            playChannel({ id: 0, name: '直播流', logo: '', group: '直接链接', url: clean });
+          } else {
+            var list = parseM3U(text, clean);
+            if (!list.length && /\.m3u8(?:$|[?#])/i.test(clean)) {
+              playChannel({ id: 0, name: '直播流', logo: '', group: '直接链接', url: clean });
+            } else {
+              setChannels(list, loaded.viaProxy ? '兼容通道播放列表' : '播放列表');
+            }
+          }
+        } catch (error) {
+          var known = compatibleCopies[clean.replace(/\/$/, '')];
+          if (known) {
+            setChannels(known.channels.map(function (item) { return Object.assign({}, item); }), '兼容副本（' + known.checked + ' 检查）');
+          } else if (/\.m3u8(?:$|[?#])/i.test(clean)) {
+            setStatus('无法预读这个流，正在尝试直接播放。', 'loading');
+            playChannel({ id: 0, name: '直播流', logo: '', group: '直接链接', url: clean });
+          } else {
+            setStatus('直接读取和兼容通道都失败了。可下载 M3U 文件后用“打开文件”载入。', 'error');
+          }
+        } finally {
+          loadBtn.disabled = false;
+          loadBtn.textContent = '载入链接';
+        }
+      }
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        loadRemote(urlInput.value.trim());
+      });
+
+      openFileBtn.addEventListener('click', function () { fileInput.click(); });
+
+      fileInput.addEventListener('change', function () {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        setStatus('正在读取 ' + file.name + '…', 'loading');
+        reader.onload = function () {
+          var text = String(reader.result || '');
+          if (isHlsManifest(text)) {
+            setStatus('这是一个 HLS 媒体清单。请使用它原本的网络链接播放，文件内的分片路径无法从本机解析。', 'error');
+          } else {
+            setChannels(parseM3U(text), file.name);
+          }
+        };
+        reader.onerror = function () { setStatus('无法读取这个文件。', 'error'); };
+        reader.readAsText(file);
+        fileInput.value = '';
+      });
+
+      searchInput.addEventListener('input', renderChannels);
+      groupSelect.addEventListener('change', renderChannels);
+
+      video.addEventListener('playing', function () {
+        nowLabel.textContent = '正在播放';
+        livePill.hidden = false;
+        setStatus('正在播放「' + nowName.textContent + '」。', 'success');
+      });
+      video.addEventListener('pause', function () {
+        if (activeUrl) nowLabel.textContent = '已暂停';
+      });
+      video.addEventListener('waiting', function () {
+        nowLabel.textContent = '正在缓冲';
+        setStatus('正在缓冲「' + nowName.textContent + '」…', 'loading');
+      });
+      video.addEventListener('error', function () {
+        setStatus('播放失败。链接可能已失效，或这个格式不受浏览器支持。', 'error');
+      });
+    }());
+  </script>
+</body>
+</html>

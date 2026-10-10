@@ -313,7 +313,7 @@
     .channel-item {
       width: 100%;
       display: grid;
-      grid-template-columns: 42px minmax(0, 1fr) 24px;
+      grid-template-columns: 42px minmax(0, 1fr) 24px 30px;
       align-items: center;
       gap: 11px;
       padding: 11px 15px;
@@ -345,6 +345,31 @@
     .item-group { margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
     .item-play { color: var(--muted); }
     .item-play svg { width: 18px; height: 18px; display: block; }
+    .engine-wrap { display: flex; align-items: center; gap: 7px; margin-left: 4px; color: #aeb1a7; font-size: 12px; white-space: nowrap; }
+    #engineSelect {
+      height: 32px;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 8px;
+      background: #1e201c;
+      color: #e9ebe4;
+      padding: 0 6px;
+      font-size: 12px;
+      outline: none;
+    }
+    #engineSelect:focus { border-color: var(--accent); }
+    .copy-btn {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .copy-btn:hover { background: var(--surface-2); color: var(--ink); }
+    .copy-btn svg { width: 15px; height: 15px; display: block; }
 
     .status {
       display: none;
@@ -453,6 +478,13 @@
             <div class="now-meta" id="nowMeta">载入链接即可开始</div>
           </div>
           <div class="live-pill" id="livePill" hidden>LIVE</div>
+          <label class="engine-wrap" for="engineSelect">引擎
+            <select id="engineSelect">
+              <option value="auto">自动</option>
+              <option value="hls">hls.js</option>
+              <option value="native">系统原生</option>
+            </select>
+          </label>
         </div>
       </div>
 
@@ -480,6 +512,7 @@
     <section class="help" aria-label="使用提示">
       <div class="help-item"><strong>链接无法读取？</strong><span>播放器会自动尝试兼容通道；仍失败时，可下载 M3U 文件后用“打开文件”载入。</span></div>
       <div class="help-item"><strong>有画面但没声音？</strong><span>浏览器只支持部分影音编码；可尝试同一频道的其他线路。</span></div>
+      <div class="help-item"><strong>特殊源播不了？</strong><span>把播放器“引擎”切到“系统原生”，iPhone 的 Safari 会用系统播放器硬解，还支持画中画和 AirPlay。</span></div>
       <div class="help-item"><strong>HTTP 播放源</strong><span>安全网页通常会拦截 HTTP 流，请优先使用 HTTPS 链接。</span></div>
     </section>
   </main>
@@ -506,10 +539,22 @@
       var nowMeta = document.getElementById('nowMeta');
       var nowArt = document.getElementById('nowArt');
       var livePill = document.getElementById('livePill');
+      var engineSelect = document.getElementById('engineSelect');
 
       var channels = [];
       var activeUrl = '';
       var hls = null;
+      var lastItem = null;
+
+      (function initEngine() {
+        var saved = '';
+        try { saved = window.localStorage.getItem('m3u-player-engine') || ''; } catch (e) {}
+        if (saved === 'hls' || saved === 'native' || saved === 'auto') engineSelect.value = saved;
+        engineSelect.addEventListener('change', function () {
+          try { window.localStorage.setItem('m3u-player-engine', engineSelect.value); } catch (e) {}
+          if (lastItem) playChannel(lastItem);
+        });
+      }());
 
       var icons = {
         info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
@@ -617,6 +662,27 @@
         if (groups.indexOf(current) >= 0) groupSelect.value = current;
       }
 
+      function copyLink(url, name) {
+        function done() { setStatus('已复制「' + name + '」的链接，去 APTV / VLC 里粘贴就能播。', 'success'); }
+        function legacy() {
+          var ta = document.createElement('textarea');
+          ta.value = url;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); done(); }
+          catch (e) { setStatus('复制失败，请手动复制链接。', 'error'); }
+          document.body.removeChild(ta);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done, legacy);
+        } else {
+          legacy();
+        }
+      }
+
       function renderChannels() {
         var query = searchInput.value.trim().toLowerCase();
         var group = groupSelect.value;
@@ -637,11 +703,12 @@
 
         var fragment = document.createDocumentFragment();
         filtered.forEach(function (item) {
-          var button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'channel-item' + (item.url === activeUrl ? ' active' : '');
-          button.setAttribute('aria-label', '播放 ' + item.name);
-          button.appendChild(artMarkup(item, 'mini-art'));
+          var row = document.createElement('div');
+          row.className = 'channel-item' + (item.url === activeUrl ? ' active' : '');
+          row.setAttribute('role', 'button');
+          row.setAttribute('tabindex', '0');
+          row.setAttribute('aria-label', '播放 ' + item.name);
+          row.appendChild(artMarkup(item, 'mini-art'));
 
           var copy = document.createElement('span');
           copy.className = 'item-copy';
@@ -653,14 +720,31 @@
           itemGroup.textContent = item.group || '未分组';
           copy.appendChild(name);
           copy.appendChild(itemGroup);
-          button.appendChild(copy);
+          row.appendChild(copy);
 
           var play = document.createElement('span');
           play.className = 'item-play';
           play.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
-          button.appendChild(play);
-          button.addEventListener('click', function () { playChannel(item); });
-          fragment.appendChild(button);
+          row.appendChild(play);
+
+          var copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.className = 'copy-btn';
+          copyBtn.title = '复制频道链接';
+          copyBtn.setAttribute('aria-label', '复制 ' + item.name + ' 的链接');
+          copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+          copyBtn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            copyLink(item.url, item.name);
+          });
+          row.appendChild(copyBtn);
+
+          function activate() { playChannel(item); }
+          row.addEventListener('click', activate);
+          row.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate(); }
+          });
+          fragment.appendChild(row);
         });
         channelList.appendChild(fragment);
       }
@@ -684,6 +768,7 @@
       function playChannel(item) {
         destroyPlayer();
         activeUrl = item.url;
+        lastItem = item;
         updateNowPlaying(item);
         renderChannels();
         emptyStage.style.display = 'none';
@@ -699,7 +784,17 @@
           }
         }
 
-        if (window.Hls && window.Hls.isSupported()) {
+        var engine = engineSelect.value || 'auto';
+        var hlsOk = !!(window.Hls && window.Hls.isSupported());
+        var nativeOk = !!video.canPlayType && !!video.canPlayType('application/vnd.apple.mpegurl');
+        var useHls = engine === 'hls' || (engine === 'auto' && hlsOk);
+        var useNative = !useHls && (engine === 'native' || (engine === 'auto' && nativeOk));
+
+        if (engine === 'hls' && !hlsOk) {
+          setStatus('当前浏览器不支持 hls.js，改用直接播放。', 'error');
+        }
+
+        if (useHls) {
           hls = new window.Hls({ enableWorker: true, lowLatencyMode: true, backBufferLength: 60 });
           hls.loadSource(item.url);
           hls.attachMedia(video);
@@ -717,11 +812,11 @@
               setStatus('频道播放失败，请尝试其他线路。', 'error');
             }
           });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        } else if (useNative) {
           video.src = item.url;
           video.addEventListener('loadedmetadata', function onReady() {
             video.removeEventListener('loadedmetadata', onReady);
-            setStatus('频道已载入，正在播放。', 'success');
+            setStatus('频道已载入，正在播放（系统原生）。', 'success');
             tryPlay();
           });
         } else {
@@ -733,6 +828,7 @@
       function setChannels(list, sourceLabel) {
         channels = list;
         activeUrl = '';
+        lastItem = null;
         searchInput.value = '';
         searchInput.disabled = !list.length;
         groupSelect.disabled = !list.length;
@@ -863,7 +959,10 @@
         setStatus('正在缓冲「' + nowName.textContent + '」…', 'loading');
       });
       video.addEventListener('error', function () {
-        setStatus('播放失败。链接可能已失效，或这个格式不受浏览器支持。', 'error');
+        var hint = engineSelect.value === 'native'
+          ? '系统原生播放失败，可把引擎切回“自动”或“hls.js”再试。'
+          : '链接可能已失效，或这个格式不受浏览器支持。';
+        setStatus('播放失败。' + hint, 'error');
       });
     }());
   </script>
